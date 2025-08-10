@@ -27,7 +27,7 @@ func getDevices(networkCardType string) string {
 	return netCard
 }
 
-func GetStreamAddress(networkCardType string) {
+func GetStreamAddress(networkCardType string) []string {
 	dri := getDevices(networkCardType)
 	handle, err := pcap.OpenLive(dri, 65535, true, pcap.BlockForever)
 	if err != nil {
@@ -40,15 +40,19 @@ func GetStreamAddress(networkCardType string) {
 	}
 
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
+	var result []string
 	for packet := range packetSource.Packets() {
 		if app := packet.ApplicationLayer(); app != nil {
 			data := string(app.Payload())
 			if strings.Contains(data, "rtmp://") {
 				fmt.Printf("推流地址:%s", data)
+				result = append(result, data)
 			}
 			if strings.Contains(data, "stream-") {
 				fmt.Printf("推流码：%s", data)
+				result = append(result, data)
 			}
 		}
 	}
+	return result
 }
