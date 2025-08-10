@@ -1,10 +1,10 @@
 package tiktok
 
 import (
-	"fmt"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/pcap"
 	"log"
+	"regexp"
 	"strings"
 )
 
@@ -38,21 +38,39 @@ func GetStreamAddress(networkCardType string) []string {
 	if err := handle.SetBPFFilter("tcp port 1935"); err != nil {
 		log.Fatal(err)
 	}
+	var (
+		rtmpURL   string
+		streamKey string
+	)
+
+	urlSplit := func(startWith, url string) string {
+		var pat string
+		if startWith == "r" {
+			pat = `rtmp[^\s]*?game`
+		} else {
+			pat = `stream-[^\s]*?True`
+		}
+
+		re := regexp.MustCompile(pat)
+		return re.FindString(url)
+	}
 
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-	var result []string
 	for packet := range packetSource.Packets() {
 		if app := packet.ApplicationLayer(); app != nil {
 			data := string(app.Payload())
-			if strings.Contains(data, "rtmp://") {
-				fmt.Printf("推流地址:%s", data)
-				result = append(result, data)
+			if rtmpURL == "" && strings.Contains(data, "rtmp://") {
+				rtmpURL = urlSplit("r", data)
 			}
-			if strings.Contains(data, "stream-") {
-				fmt.Printf("推流码：%s", data)
-				result = append(result, data)
+			if streamKey == "" && strings.Contains(data, "stream-") {
+				streamKey = urlSplit("s", data)
+			}
+
+			// 如果都抓到了，就返回
+			if rtmpURL != "" && streamKey != "" {
+				return []string{rtmpURL, streamKey}
 			}
 		}
 	}
-	return result
+	return []string{}
 }
